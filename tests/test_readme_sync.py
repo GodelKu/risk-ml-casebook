@@ -20,5 +20,8 @@ def test_readme_matches_results() -> None:
     import json
 
     tables = mod.credit_tables(json.loads((ROOT / "results" / "credit_default.json").read_text()))
+    fraud = ROOT / "results" / "bank_fraud.json"
+    if fraud.exists():
+        tables.update(mod.fraud_tables(json.loads(fraud.read_text())))
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert mod.fill(readme, tables) == readme, "run: python tools/fill_readme.py"

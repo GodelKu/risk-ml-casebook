@@ -14,6 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
 CREDIT = ROOT / "results" / "credit_default.json"
+FRAUD = ROOT / "results" / "bank_fraud.json"
 
 MODEL_NAMES = {
     "prior_rate": "Prior rate (no skill)",
@@ -82,6 +83,85 @@ def credit_tables(d: dict) -> dict[str, str]:
     }
 
 
+def fraud_tables(d: dict) -> dict[str, str]:
+    t = d["test"]
+    data = d["data"]
+    sp = data["split"]
+    rates = data["fraud_rate_by_month"]
+    summary = (
+        f"{data['rows']} applications, fraud rate {data['fraud_rate']:.4f} overall, from "
+        f"{min(rates.values()):.4f} to {max(rates.values()):.4f} by month. Train months "
+        f"{sp['train_months'][0]} to {sp['train_months'][-1]} ({sp['train']} rows), validation month "
+        f"{sp['validation_months'][0]} ({sp['validation']}), test months {sp['test_months'][0]} and "
+        f"{sp['test_months'][-1]} ({sp['test']}). Test months opened once at {t['sealed_at']}. "
+        f"Input CSV sha256 `{data['file_sha256'][:16]}…`."
+    )
+    lines = ["| Model | ROC AUC | PR AUC | Brier |", "| --- | --- | --- | --- |"]
+    for key in ("prior_rate", "logistic_regression", "gradient_boosting"):
+        m = t["metrics"][key]
+        lines.append(
+            f"| {MODEL_NAMES[key]} | {ci(m['roc_auc'])} | {ci(m['pr_auc'])} | "
+            f"{m['brier']['point']:.4f} |"
+        )
+    metrics = "\n".join(lines)
+
+    dv = d["decision_on_validation"]
+    da = t["decision_applied"]
+    rec = t["recall_at_validation_threshold"]
+    dec = [
+        "| Where | Threshold | FPR | Recall (TPR) | Flagged share |",
+        "| --- | --- | --- | --- | --- |",
+        f"| Validation month (threshold chosen here) | {dv['threshold']:.4f} | {dv['fpr']:.4f} "
+        f"| {dv['tpr']:.3f} | {dv['flagged_share']:.4f} |",
+        f"| Test months 6 and 7 | same | {da['fpr']:.4f} | {ci(rec)} | {da['flagged_share']:.4f} |",
+    ]
+    for r in t["decision_by_month"]:
+        dec.append(
+            f"| Test month {r['month']} | same | {r['fpr']:.4f} | {r['tpr']:.3f} | "
+            f"{r['flagged_share']:.4f} |"
+        )
+    decision = "\n".join(dec)
+
+    def fair_row(label: str, f: dict, tpr: float) -> str:
+        return (
+            f"| {label} | {tpr:.3f} | {f['fpr_age_under_50']:.4f} | {f['fpr_age_50_plus']:.4f} | "
+            f"{f['ratio_young_over_old']:.3f} [{f['ratio_low']:.3f}, {f['ratio_high']:.3f}] |"
+        )
+
+    ab = t["ablation_without_age"]
+    fairness = "\n".join(
+        [
+            "| Test months 6 and 7 | Recall | FPR under 50 | FPR 50 and over | FPR ratio under 50 / 50+ |",
+            "| --- | --- | --- | --- | --- |",
+            fair_row("All features", t["fairness"], da["tpr"]),
+            fair_row("Without customer_age", ab["fairness"], ab["decision_applied"]["tpr"]),
+        ]
+    )
+    drift_lines = [
+        "| Month | Rows | ROC AUC | PR AUC | Score PSI vs month 5 |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for r in t["score_by_month"]:
+        drift_lines.append(
+            f"| {r['period']} | {int(r['n'])} | {r['roc_auc']:.3f} | {r['pr_auc']:.3f} | "
+            f"{r['score_psi']:.4f} |"
+        )
+    top = t["feature_psi_train_vs_test"][:5]
+    drift = (
+        "\n".join(drift_lines)
+        + "\n\nLargest feature shifts, train months vs test months (PSI): "
+        + ", ".join(f"`{r['feature']}` {r['psi']:.3f}" for r in top)
+        + "."
+    )
+    return {
+        "fraud_summary": summary,
+        "fraud_metrics": metrics,
+        "fraud_decision": decision,
+        "fraud_fairness": fairness,
+        "fraud_drift": drift,
+    }
+
+
 def fill(text: str, tables: dict[str, str]) -> str:
     for name, body in tables.items():
         pattern = re.compile(rf"(<!-- BEGIN {name} -->\n).*?(<!-- END {name} -->)", re.S)
@@ -93,6 +173,8 @@ def fill(text: str, tables: dict[str, str]) -> str:
 
 def main() -> int:
     tables = credit_tables(json.loads(CREDIT.read_text(encoding="utf-8")))
+    if FRAUD.exists():
+        tables.update(fraud_tables(json.loads(FRAUD.read_text(encoding="utf-8"))))
     new = fill(README.read_text(encoding="utf-8"), tables)
     if "--check" in sys.argv:
         return 0 if new == README.read_text(encoding="utf-8") else 1
