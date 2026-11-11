@@ -4,7 +4,9 @@ Honestly evaluated risk models, plus `riskeval`, a small library that evaluates 
 
 **Case 1, credit card default (UCI 350, CC BY 4.0).** Gradient boosting reaches the ROC AUC shown below on a sealed 20 % test set that was opened once, with 95 % stratified bootstrap intervals for every metric, a calibration check, a decision threshold chosen on validation from an explicit cost assumption, and an ablation without sex, marital status and age. Every number in this file is copied by `tools/fill_readme.py` from `results/*.json`, which the scripts write; a test fails if they disagree.
 
-This is a study on public Taiwanese data from 2005. It is not a model for lending decisions.
+**Case 2, account opening fraud (Bank Account Fraud suite, NeurIPS 2022).** One million synthetic applications over eight months with about 1 % fraud. The test is out of time: train on months 0 to 4, choose everything on month 5, open months 6 and 7 once. The operating point is a 5 % false positive rate fixed on validation, followed by a check of what that threshold actually does on later months, false positive rates by age group, and feature and score drift.
+
+Both cases are studies on public data. Neither is a model for decisions about real people.
 
 ## riskeval in one command
 
@@ -81,6 +83,70 @@ ROC AUC with all features minus ROC AUC without SEX, MARRIAGE and AGE: **0.0025 
 
 An interval that contains zero means no measurable difference on this test set. In the United States, Regulation B (12 CFR 1002.6(b)) says a creditor shall not consider sex in any aspect of a credit transaction ((b)(9)), shall evaluate married and unmarried applicants by the same standards ((b)(8)), and may use age in an empirically derived, statistically sound scoring system only if the age of an elderly applicant is not assigned a negative factor or value ((b)(2)(ii)). Source: [law.cornell.edu](https://www.law.cornell.edu/cfr/text/12/1002.6). Removing the columns does not remove proxies for them.
 
+## Case 2: account opening fraud, out of time
+
+Data: Base.csv of the [Bank Account Fraud suite](https://www.kaggle.com/datasets/sgpjesus/bank-account-fraud-dataset-neurips-2022) (Jesus et al., "Turning the Tables: Biased, Imbalanced, Dynamic Tabular Datasets for ML Evaluation", NeurIPS 2022), license CC BY-NC-SA 4.0. The data are synthetic, generated from a real fraud dataset, and are not stored in this repository. Model card: [cases/bank_fraud/MODEL_CARD.md](cases/bank_fraud/MODEL_CARD.md).
+
+<!-- BEGIN fraud_summary -->
+1000000 applications, fraud rate 0.0110 overall, from 0.0087 to 0.0147 by month. Train months 0 to 4 (675666 rows), validation month 5 (119323), test months 6 and 7 (205011). Test months opened once at 2026-11-11T00:00:10+00:00. Input CSV sha256 `7bf10a37ce07e72e…`.
+<!-- END fraud_summary -->
+
+### Validation protocol
+
+* Split by month, not at random, so the test measures the model on applications that arrive after training.
+* Gradient boosting (4-point grid) is chosen by recall at 5 % FPR on month 5. Logistic regression is the baseline.
+* The threshold is the lowest score with at most 5 % false positives on month 5 and is applied unchanged to months 6 and 7.
+
+### Results on the test months (95 % intervals)
+
+<!-- BEGIN fraud_metrics -->
+| Model | ROC AUC | PR AUC | Brier |
+| --- | --- | --- | --- |
+| Prior rate (no skill) | 0.500 | 0.014 | 0.0139 |
+| Logistic regression | 0.882 [0.876, 0.888] | 0.162 [0.151, 0.175] | 0.0129 |
+| Gradient boosting (sklearn HGB) | 0.889 [0.883, 0.895] | 0.185 [0.173, 0.198] | 0.0126 |
+<!-- END fraud_metrics -->
+
+With 1.4 % fraud in the test months, PR AUC is the more telling number: no-skill PR AUC equals the fraud rate.
+
+### What a threshold fixed on validation does later
+
+<!-- BEGIN fraud_decision -->
+| Where | Threshold | FPR | Recall (TPR) | Flagged share |
+| --- | --- | --- | --- | --- |
+| Validation month (threshold chosen here) | 0.0277 | 0.0500 | 0.542 | 0.0558 |
+| Test months 6 and 7 | same | 0.0573 | 0.569 [0.553, 0.586] | 0.0645 |
+| Test month 6 | same | 0.0650 | 0.579 | 0.0719 |
+| Test month 7 | same | 0.0487 | 0.558 | 0.0562 |
+<!-- END fraud_decision -->
+
+The threshold was set for 5 % false positives, and the realised rate moved with the month. A fraud team plans its review capacity from this number, so in practice the threshold would be re-checked every month against the alert budget.
+
+### False positive rate by age group
+
+<!-- BEGIN fraud_fairness -->
+| Test months 6 and 7 | Recall | FPR under 50 | FPR 50 and over | FPR ratio under 50 / 50+ |
+| --- | --- | --- | --- | --- |
+| All features | 0.569 | 0.0420 | 0.1366 | 0.307 [0.297, 0.318] |
+| Without customer_age | 0.562 | 0.0469 | 0.1094 | 0.429 [0.413, 0.444] |
+<!-- END fraud_fairness -->
+
+Legitimate applicants aged 50 and over are flagged about three times as often as younger ones. Dropping `customer_age` narrows the gap at a small cost in recall but does not close it, which suggests that other features carry information about age. Following the BAF paper this is reported as predictive equality (equal false positive rates); which fairness criterion should apply is a policy decision, not a modelling one.
+
+### Drift between months
+
+<!-- BEGIN fraud_drift -->
+| Month | Rows | ROC AUC | PR AUC | Score PSI vs month 5 |
+| --- | --- | --- | --- | --- |
+| 5 | 119323 | 0.893 | 0.178 | 0.0000 |
+| 6 | 108168 | 0.890 | 0.172 | 0.0090 |
+| 7 | 96843 | 0.891 | 0.207 | 0.0321 |
+
+Largest feature shifts, train months vs test months (PSI): `velocity_4w` 3.739, `velocity_24h` 1.892, `velocity_6h` 1.089, `zip_count_4w` 0.491, `date_of_birth_distinct_emails_4w` 0.399.
+<!-- END fraud_drift -->
+
+Several input features shift strongly between the training and test months (PSI well above the common 0.25 rule of thumb), while the score distribution and ROC AUC stay almost stable. Feature PSI alone would raise alarms here; the score PSI and the monthly performance are what show whether the model still works.
+
 ## Limitations
 
 * One cross-sectional snapshot from Taiwan in 2005. No time column, so no out-of-time test and no drift check for case 1.
@@ -90,7 +156,7 @@ An interval that contains zero means no measurable difference on this test set. 
 * ECE is biased upward on small bins, and its percentile bootstrap interval can sit slightly above the point estimate.
 * The environment used to build this repository had no LightGBM or PyTorch. Boosting uses scikit-learn's `HistGradientBoostingClassifier` and the neural network is scikit-learn's `MLPClassifier`.
 * Test coverage percentage was not measured (no coverage tool in the build environment).
-* Case 2 (account opening fraud, temporal split and drift) is planned and not yet included.
+* Case 2 uses synthetic data, so its absolute numbers say little about any real bank. Only two months are held out, and the 5 % FPR operating point is a convention, not a measured cost. The grid search on month 5 makes the validation numbers slightly optimistic; the test numbers are the honest ones.
 
 ## Why not Evidently, Deepchecks or Fairlearn
 
@@ -101,9 +167,10 @@ They do more and are maintained by teams. `riskeval` is under 600 lines, every f
 ```bash
 pip install -e ".[dev]" && pytest -q
 python cases/credit_default/run.py --data data/raw/uci350_credit.csv --final
+python cases/bank_fraud/run.py --data data/raw/baf_base.csv --final
 python tools/fill_readme.py
 ```
 
-Download the dataset from the UCI page above and export the `.xls` to `data/raw/uci350_credit.csv` (for example `libreoffice --headless --convert-to csv`), or pass the `.xls` directly if `xlrd` is installed.
+For case 2, download Base.csv from the Kaggle page above (an account is needed) and save it as `data/raw/baf_base.csv`. For case 1, download the dataset from the UCI page above and export the `.xls` to `data/raw/uci350_credit.csv` (for example `libreoffice --headless --convert-to csv`), or pass the `.xls` directly if `xlrd` is installed.
 
 MIT license. Developed with AI assistance.

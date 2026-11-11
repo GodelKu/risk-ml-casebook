@@ -1,4 +1,4 @@
-# 25 interview questions
+# 31 interview questions
 
 Answer each without looking, then check. File references point to where the answer lives in code.
 
@@ -27,3 +27,13 @@ Answer each without looking, then check. File references point to where the answ
 23. **Does dropping protected columns make the model fair?** No. Other features can act as proxies, and fairness needs outcome analysis by group.
 24. **What is PSI and when would you use it here?** A measure of distribution shift between a reference and a new sample; it needs time periods, which case 1 lacks. (`drift.py`)
 25. **What would you do next with real data?** Out-of-time validation, costs from actual exposure and recovery, monitoring PSI of score and key features, and checking outcomes by group.
+
+## Case 2, account opening fraud
+
+26. **Why split by month instead of at random?** Fraud patterns and input distributions change over time; a random split mixes future rows into training and overstates performance. (`cases/bank_fraud/run.py`, `TRAIN_MONTHS`)
+27. **Why a 5 % FPR operating point and not a cost ratio?** In fraud review the binding constraint is usually how many alerts analysts can handle, and 5 % FPR is the convention of the BAF paper, which makes results comparable.
+28. **The threshold gave 5 % FPR on month 5 but 6.5 % on month 6. What does that mean?** The score distribution of legitimate applicants moved, so a fixed threshold no longer meets the alert budget. Monitor realised FPR and re-set the threshold on recent data.
+29. **Feature PSI for `velocity_4w` is 3.7 but score PSI is under 0.04. Is the model broken?** Not by itself: monthly ROC AUC is stable. Possible reasons are that the shift affects fraud and legitimate rows alike, or that the trees split on that feature in ranges that moved little. I did not test which; score and performance monitoring decide, feature PSI is only a hint.
+30. **What does the age result show?** At the same threshold, legitimate applicants aged 50+ get a false positive rate about three times higher. Dropping `customer_age` narrows but does not close the gap, which suggests proxies.
+31. **Why is PR AUC 0.185 good when it looks small?** No-skill PR AUC equals the fraud rate, 0.014 on the test months, so 0.185 is about thirteen times better than chance.
+
