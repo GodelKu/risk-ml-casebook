@@ -11,7 +11,7 @@ Checked on 2026-11-10. Lines marked *not verified* come from memory or search sn
 
 ## What riskeval adds
 
-A small, readable library (under 600 lines) that puts five things in one place with tests against known answers: stratified bootstrap intervals on every metric, equal-mass calibration and ECE, cost-based and FPR-budget thresholds with the trivial policies as baselines, PSI by period, and group slices with small-sample flags. One CLI command writes a single HTML file that works offline and on a phone.
+A small, readable library (about 700 lines) that puts five things in one place with tests against known answers: stratified bootstrap intervals on every metric, equal-mass calibration and ECE, cost-based and FPR-budget thresholds with the trivial policies as baselines, PSI by period, and group slices with small-sample flags. One CLI command writes a single HTML file that works offline and on a phone.
 
 ## When to use something else
 

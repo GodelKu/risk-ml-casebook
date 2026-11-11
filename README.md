@@ -1,5 +1,7 @@
 # risk-ml-casebook
 
+[![CI](https://github.com/GodelKu/risk-ml-casebook/actions/workflows/ci.yml/badge.svg)](https://github.com/GodelKu/risk-ml-casebook/actions/workflows/ci.yml) ![Python 3.10 to 3.13](https://img.shields.io/badge/python-3.10%20to%203.13-blue) ![License MIT](https://img.shields.io/badge/license-MIT-green)
+
 Honestly evaluated risk models, plus `riskeval`, a small library that evaluates any binary risk model from a CSV of predictions and writes one offline HTML report.
 
 **Case 1, credit card default (UCI 350, CC BY 4.0).** Gradient boosting reaches the ROC AUC shown below on a sealed 20 % test set that was opened once, with 95 % stratified bootstrap intervals for every metric, a calibration check, a decision threshold chosen on validation from an explicit cost assumption, and an ablation without sex, marital status and age. Every number in this file is copied by `tools/fill_readme.py` from `results/*.json`, which the scripts write; a test fails if they disagree.
@@ -160,7 +162,7 @@ Several input features shift strongly between the training and test months (PSI 
 
 ## Why not Evidently, Deepchecks or Fairlearn
 
-They do more and are maintained by teams. `riskeval` is under 600 lines, every function is tested against a known answer, and one command gives intervals, calibration, a cost-based threshold, drift and slices in one offline file. See [docs/PRIOR_ART.md](docs/PRIOR_ART.md).
+They do more and are maintained by teams. `riskeval` is about 700 lines, its metrics, intervals and thresholds are tested against known answers, and one command gives intervals, calibration, a cost-based threshold, drift and slices in one offline file. See [docs/PRIOR_ART.md](docs/PRIOR_ART.md).
 
 ## Reproduce
 
@@ -173,4 +175,23 @@ python tools/fill_readme.py
 
 For case 2, download Base.csv from the Kaggle page above (an account is needed) and save it as `data/raw/baf_base.csv`. For case 1, download the dataset from the UCI page above and export the `.xls` to `data/raw/uci350_credit.csv` (for example `libreoffice --headless --convert-to csv`), or pass the `.xls` directly if `xlrd` is installed.
 
-MIT license. Developed with AI assistance.
+## Documentation
+
+* [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md): every module, why it is built that way, and what was rejected.
+* [docs/DESIGN_FAQ.md](docs/DESIGN_FAQ.md): questions a reviewer is likely to ask, with answers tied to code and results.
+* [docs/PRIOR_ART.md](docs/PRIOR_ART.md): existing tools and where this project differs.
+* [docs/ROADMAP.md](docs/ROADMAP.md): planned extensions, each with a failing test already written.
+* Model cards: [case 1](cases/credit_default/MODEL_CARD.md), [case 2](cases/bank_fraud/MODEL_CARD.md).
+
+## How this was built
+
+I used an AI coding assistant (Claude) for most of the implementation and documentation. I chose the problems and the datasets, agreed on the evaluation rules before any code was written, and supplied the data. The rules were set so that generated code cannot quietly produce a wrong number:
+
+* metrics, intervals and thresholds have tests with known answers, including a simulation that checks bootstrap coverage;
+* the test split is opened once, by a separate `--final` run that records the time;
+* README tables are generated from the results JSON, and a test fails if the two disagree;
+* CI runs lint, type checks and tests on Linux, macOS and Windows.
+
+Commits written with the assistant carry a `Co-Authored-By` line. I am responsible for every claim in this README; if you find one the code does not support, please open an issue.
+
+Author: Georgii Baiev, physics student at California State University, Northridge. MIT license.

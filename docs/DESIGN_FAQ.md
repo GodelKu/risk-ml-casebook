@@ -1,6 +1,6 @@
-# 31 interview questions
+# Design FAQ
 
-Answer each without looking, then check. File references point to where the answer lives in code.
+Questions a reviewer is likely to ask about the design choices, with short answers and pointers to the code or results that back them.
 
 1. **Why not report accuracy?** With 22 % defaults, always predicting "no default" scores 78 %. Use ROC AUC, PR AUC, Brier, log loss. (`metrics.py`)
 2. **What is the no-skill PR AUC?** The positive rate, here 0.221. (`README`, test `test_constant_prevalence_score_has_pr_auc_equal_prevalence`)
@@ -20,7 +20,7 @@ Answer each without looking, then check. File references point to where the answ
 16. **Is the model useful at all?** Mean cost 0.545 per client on test versus 0.779 for flagging everybody and 1.106 for flagging nobody.
 17. **Why calibrate on validation and judge on test?** Fitting and judging on the same data makes calibration look perfect.
 18. **Did calibration help?** No; raw boosting ECE was already lowest. Isotonic overfit slightly.
-19. **Why did you use HistGradientBoosting instead of LightGBM?** LightGBM was not installable in the build environment; HGB is the same family (histogram-based boosting) and the plan allowed it.
+19. **Why did you use HistGradientBoosting instead of LightGBM?** LightGBM was not available in the build environment. HGB is the same family (histogram-based gradient boosting), and on 30 000 rows the difference between implementations is usually smaller than the width of the interval.
 20. **How did you tune boosting?** 8-point grid (learning rate, leaves, L2) with early stopping inside training, chosen by validation ROC AUC. (`gb_grid` in JSON)
 21. **What does the ablation show?** Dropping SEX, MARRIAGE and AGE changed test ROC AUC by about 0.0025 with an interval that includes zero.
 22. **Why a paired bootstrap for the difference?** Both models are scored on the same resampled rows, which removes shared noise and gives a much tighter interval.
