@@ -25,7 +25,9 @@ from riskeval import (
     threshold_at_fpr,
     threshold_by_cost,
 )
+from riskeval.io import read_predictions
 from riskeval.report import render, table
+from riskeval.thresholds import baseline_costs, evaluate_threshold
 
 
 def calibrated_sample(n: int, seed: int = 0) -> tuple[np.ndarray, np.ndarray]:
@@ -290,3 +292,34 @@ def test_calibration_bins_keep_ties_together_and_ignore_row_order() -> None:
     y2, p2 = calibrated_sample(5000, seed=9)
     perm = np.random.default_rng(0).permutation(5000)
     assert ece(y2, p2) == pytest.approx(ece(y2[perm], p2[perm]))
+
+
+def test_evaluate_threshold_counts_by_hand() -> None:
+    y = np.array([0, 0, 1, 1])
+    p = np.array([0.1, 0.6, 0.4, 0.9])
+    d = evaluate_threshold(y, p, 0.5, c_fp=1.0, c_fn=5.0)
+    # flagged: rows 2 and 4 -> one false positive, one false negative
+    assert (d.tpr, d.fpr, d.flagged_share) == (0.5, 0.5, 0.5)
+    assert d.expected_cost == pytest.approx((1 * 1 + 5 * 1) / 4)
+
+
+def test_baseline_costs_match_definition() -> None:
+    y = np.array([0, 0, 0, 1])
+    base = baseline_costs(y, c_fp=1.0, c_fn=5.0)
+    assert base["flag_none"] == pytest.approx(5 * 0.25)
+    assert base["flag_all"] == pytest.approx(1 * 0.75)
+
+
+def test_read_predictions_validates_input(tmp_path) -> None:
+    good = tmp_path / "good.csv"
+    pd.DataFrame({"y": [0, 1], "p": [0.2, 0.7], "other": ["a", "b"]}).to_csv(good, index=False)
+    df = read_predictions(good, "y", "p")
+    assert list(df.columns) == ["y", "p"]
+    bad = tmp_path / "bad.csv"
+    pd.DataFrame({"y": [0, 2], "p": [0.2, 0.7]}).to_csv(bad, index=False)
+    with pytest.raises(ValueError, match="only 0 and 1"):
+        read_predictions(bad, "y", "p")
+    with pytest.raises(ValueError, match="missing columns"):
+        read_predictions(good, "label", "p")
+    with pytest.raises(ValueError, match="limit"):
+        read_predictions(good, "y", "p", max_bytes=1)
