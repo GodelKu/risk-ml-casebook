@@ -185,7 +185,7 @@ For case 2, download Base.csv from the Kaggle page above (an account is needed) 
 
 ## How this was built
 
-I used an AI coding assistant (Claude) for most of the implementation and documentation. I chose the problems and the datasets, agreed on the evaluation rules before any code was written, and supplied the data. The rules were set so that generated code cannot quietly produce a wrong number:
+I built this together with an AI coding assistant (Claude). The implementation was shared work: I wrote much of it with the assistant's help, and the assistant wrote the rest and drafted most of the documentation. I chose the problems and the datasets, agreed on the evaluation rules before any code was written, and supplied the data. The rules were set so that no code, mine or generated, can quietly produce a wrong number:
 
 * metrics, intervals and thresholds have tests with known answers, including a simulation that checks bootstrap coverage;
 * the test split is opened once, by a separate `--final` run that records the time;
